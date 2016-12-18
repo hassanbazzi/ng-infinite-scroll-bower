@@ -1,4 +1,4 @@
-/* ng-infinite-scroll - v1.3.0 - 2016-12-18 */
+/* ng-infinite-scroll - v1.3.7 - 2016-12-18 */
 (function (global, factory) {
   if (typeof define === "function" && define.amd) {
     define(['module', 'exports', 'angular'], factory);
@@ -28,7 +28,7 @@
 
   var MODULE_NAME = 'infinite-scroll';
 
-  _angular2['default'].module(MODULE_NAME, []).value('THROTTLE_MILLISECONDS', null).directive('infiniteScroll', ['$rootScope', '$window', '$interval', 'THROTTLE_MILLISECONDS', function ($rootScope, $window, $interval, THROTTLE_MILLISECONDS) {
+  _angular2['default'].module(MODULE_NAME, []).value('THROTTLE_MILLISECONDS', null).directive('infiniteScroll', ['$rootScope', '$window', '$timeout', '$interval', 'THROTTLE_MILLISECONDS', function ($rootScope, $window, $timeout, $interval, THROTTLE_MILLISECONDS) {
     return {
       scope: {
         infiniteScroll: '&',
@@ -49,7 +49,7 @@
         var immediateCheck = true;
         var useDocumentBottom = false;
         var unregisterEventListener = null;
-        var checkInterval = false;
+        var checkTimeout = false;
 
         function height(element) {
           var el = element[0] || element;
@@ -115,8 +115,8 @@
               }
             }
           } else {
-            if (checkInterval) {
-              $interval.cancel(checkInterval);
+            if (checkTimeout) {
+              $timeout.cancel(checkTimeout);
             }
             checkWhenEnabled = false;
           }
@@ -134,7 +134,7 @@
 
           function later() {
             previous = new Date().getTime();
-            $interval.cancel(timeout);
+            $timeout.cancel(timeout);
             timeout = null;
             return func.call();
           }
@@ -143,12 +143,13 @@
             var now = new Date().getTime();
             var remaining = wait - (now - previous);
             if (remaining <= 0) {
-              $interval.cancel(timeout);
+              $timeout.cancel(timeout);
               timeout = null;
               previous = now;
               func.call();
             } else if (!timeout) {
-              timeout = $interval(later, remaining, 1);
+              // A digest cycle is not required everytime the timer runs
+              timeout = $interval(later, remaining, 0, false);
             }
           }
 
@@ -163,8 +164,8 @@
             unregisterEventListener();
             unregisterEventListener = null;
           }
-          if (checkInterval) {
-            $interval.cancel(checkInterval);
+          if (checkTimeout) {
+            $timeout.cancel(checkTimeout);
           }
         }
 
@@ -276,15 +277,16 @@
           immediateCheck = scope.$eval(attrs.infiniteScrollImmediateCheck);
         }
 
-        function intervalCheck() {
+        function timeoutCheck() {
           if (immediateCheck) {
             handler();
           }
-          return $interval.cancel(checkInterval);
+          return $timeout.cancel(checkTimeout);
         }
-
-        checkInterval = $interval(intervalCheck);
-        return checkInterval;
+        // we make sure to call $timeout since forcing a digest cycle isn't
+        // neccesary at this point
+        checkTimeout = $timeout(timeoutCheck, 0, false);
+        return checkTimeout;
       }
     };
   }]);
